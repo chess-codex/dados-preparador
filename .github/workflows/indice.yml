@@ -31,18 +31,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      # lista oficial da FIDE: casa o nome com o FIDE ID nas transmissões antigas (sem a tag FideId).
-      # Se a FIDE estiver fora do ar, o índice sai só com as partidas que têm a tag.
+      # lista oficial da FIDE compactada (scripts/lista-fide.mjs; o site da FIDE recusa os servidores do
+      # GitHub, por isso ela fica no release "lista-fide"): casa o nome com o FIDE ID nas transmissões
+      # antigas, sem a tag FideId. Sem ela, o índice sai só com as partidas que têm a tag.
       - name: Lista de jogadores da FIDE
         continue-on-error: true
-        run: |
-          curl -fsSL --retry 3 -o players_list.zip https://ratings.fide.com/download/players_list.zip
-          unzip -o -q players_list.zip -d fide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download lista-fide -R "$GITHUB_REPOSITORY" -p fide.tsv.gz
       # o campo entra por variável de ambiente, não direto no comando (evita injeção)
       - name: Gera o índice
         env:
           MONTH: ${{ inputs.month }}
-        run: node --max-old-space-size=12288 scripts/indice.mjs --out site --month "$MONTH" --fide fide/players_list_foa.txt
+        run: node --max-old-space-size=12288 scripts/indice.mjs --out site --month "$MONTH" --fide fide.tsv.gz
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

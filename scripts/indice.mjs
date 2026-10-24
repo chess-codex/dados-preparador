@@ -16,11 +16,11 @@
 //                          lances do caminho, separados por espaço) % 32 em hexadecimal:
 //                          { "<lances até aqui, separados por espaço>": "san:partidas:meios-pontos|…" }
 //
-// As transmissões até 2023 quase não trazem a tag FideId: com --fide (players_list_foa.txt da lista
-// oficial, https://ratings.fide.com/download/players_list.zip) o nome do jogador é casado com o FIDE ID.
+// As transmissões até 2023 quase não trazem a tag FideId: com --fide (fide.tsv.gz, a lista oficial
+// compactada por scripts/lista-fide.mjs) o nome do jogador é casado com o FIDE ID.
 //
 // Só módulos do Node (zstd do próprio Node).
-// Uso: node scripts/indice.mjs [--out site] [--month 2025-01,…] [--sample-mb 5] [--fide players_list_foa.txt]
+// Uso: node scripts/indice.mjs [--out site] [--month 2025-01,…] [--sample-mb 5] [--fide fide.tsv.gz]
 import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Readable, Transform } from 'node:stream';
@@ -116,19 +116,14 @@ async function loadFide(path) {
     if (list) list.push(p);
     else map.set(k, [p]);
   };
-  let cols = null;
   let n = 0;
-  for await (const line of createInterface({ input: createReadStream(path, 'latin1'), crlfDelay: Infinity })) {
-    if (!cols) {
-      const at = (h) => line.indexOf(h);
-      cols = { id: at('ID Number'), name: at('Name'), fed: at('Fed'), s: at('SRtng'), sg: at('SGm'), r: at('RRtng'), rg: at('RGm'), b: at('BRtng'), bg: at('BGm') };
-      continue;
-    }
-    const id = line.slice(cols.id, cols.name).trim();
-    if (!FIDE.test(id)) continue;
-    const rating = Number(line.slice(cols.s, cols.sg)) || Number(line.slice(cols.r, cols.rg)) || Number(line.slice(cols.b, cols.bg)) || 0;
-    if (!rating) continue; // nunca teve rating: não aparece em transmissão de torneio válido
-    const raw = words(line.slice(cols.name, cols.fed).trim());
+  // fide.tsv.gz (scripts/lista-fide.mjs): "FIDE ID<TAB>rating<TAB>nome" por linha
+  const input = createReadStream(path).pipe(zlib.createGunzip());
+  for await (const line of createInterface({ input, crlfDelay: Infinity })) {
+    const [id, r, name] = line.split('	');
+    const rating = Number(r);
+    if (!FIDE.test(id ?? '') || !rating || !name) continue;
+    const raw = words(name);
     const [sur, given = ''] = raw.split(',');
     const s = sur.trim().split(/\s+/);
     const g = given.trim().split(/\s+/).filter(Boolean);
