@@ -1,0 +1,50 @@
+# Gera o índice de partidas por FIDE ID a partir das transmissões do Lichess e publica no GitHub
+# Pages (https://chess-codex.github.io/dados-preparador/). Todo dia 8 (o Lichess publica o mês
+# anterior nos primeiros dias) e sob demanda.
+name: indice
+
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Meses (AAAA-MM, separados por vírgula). Vazio = todos'
+        required: false
+        default: ''
+  schedule:
+    - cron: '0 6 8 * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: indice
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # o campo entra por variável de ambiente, não direto no comando (evita injeção)
+      - name: Gera o índice
+        env:
+          MONTH: ${{ inputs.month }}
+        run: node --max-old-space-size=6144 scripts/indice.mjs --out site --month "$MONTH"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
